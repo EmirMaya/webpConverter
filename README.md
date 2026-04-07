@@ -24,4 +24,4 @@ Si la carpeta de entrada es `./imagenes`, el script genera `./imagenes-webp` con
 
 - Solo procesa archivos del primer nivel de la carpeta indicada.
 - Crea la carpeta de salida si no existe.
-- Falla con mensaje claro si la carpeta no existe o no contiene `.jpg`/`.jpeg`.
+- Falla con mensaje claro si la carpeta no existe o no contiene `.jpg`/`.jpeg`.# webpConverter
