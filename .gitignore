@@ -1,0 +1,5 @@
+node_modules/
+imagenes-webp/
+*-webp/
+sample-input/
+sample-input-webp/

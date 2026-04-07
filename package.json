@@ -1,0 +1,17 @@
+{
+  "name": "convertidor-webp",
+  "version": "1.0.0",
+  "description": "Conversor simple de imagenes JPG a WEBP",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node ./src/index.js",
+    "convert": "node ./src/index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "sharp": "^0.34.1"
+  }
+}
