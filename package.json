@@ -1,7 +1,7 @@
 {
   "name": "convertidor-webp",
   "version": "1.0.0",
-  "description": "Conversor simple de imagenes JPG a WEBP",
+  "description": "Conversor simple de imagenes JPG, JPEG y HEIC a WEBP",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "heic-convert": "^2.1.0",
     "sharp": "^0.34.1"
   }
 }

@@ -1,6 +1,6 @@
-# Convertidor JPG a WEBP
+# Convertidor de imagenes a WEBP
 
-Proyecto simple en Node.js para convertir todas las imagenes `.jpg` o `.jpeg` de una carpeta a una nueva carpeta con archivos `.webp`.
+Proyecto simple en Node.js para convertir todas las imagenes `.jpg`, `.jpeg` o `.heic` de una carpeta a una nueva carpeta con archivos `.webp`.
 
 ## Requisitos
 
@@ -24,4 +24,4 @@ Si la carpeta de entrada es `./imagenes`, el script genera `./imagenes-webp` con
 
 - Solo procesa archivos del primer nivel de la carpeta indicada.
 - Crea la carpeta de salida si no existe.
-- Falla con mensaje claro si la carpeta no existe o no contiene `.jpg`/`.jpeg`.# webpConverter
+- Falla con mensaje claro si la carpeta no existe o no contiene `.jpg`, `.jpeg` o `.heic`.

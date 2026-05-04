@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const VALID_EXTENSIONS = new Set([".jpg", ".jpeg"]);
+const VALID_EXTENSIONS = new Set([".jpg", ".jpeg", ".heic"]);
 
 export async function ensureDirectoryExists(directoryPath) {
   const stats = await fs.stat(directoryPath).catch(() => null);
@@ -21,7 +21,7 @@ export async function createOutputDirectory(inputDirectory) {
   return outputDirectory;
 }
 
-export async function getJpgFiles(directoryPath) {
+export async function getConvertibleImageFiles(directoryPath) {
   const entries = await fs.readdir(directoryPath, { withFileTypes: true });
 
   return entries
@@ -32,3 +32,5 @@ export async function getJpgFiles(directoryPath) {
       outputName: `${path.parse(entry.name).name}.webp`
     }));
 }
+
+export const getJpgFiles = getConvertibleImageFiles;

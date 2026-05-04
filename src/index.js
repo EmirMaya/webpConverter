@@ -1,10 +1,10 @@
 import { resolveInputDirectory } from "./modules/cli.js";
-import { convertJpgDirectoryToWebp } from "./modules/converter.js";
+import { convertImageDirectoryToWebp } from "./modules/converter.js";
 
 async function main() {
   try {
     const inputDirectory = resolveInputDirectory(process.argv);
-    const result = await convertJpgDirectoryToWebp(inputDirectory);
+    const result = await convertImageDirectoryToWebp(inputDirectory);
 
     console.log(`Conversion finalizada: ${result.convertedCount} archivo(s) procesado(s).`);
     console.log(`Carpeta de salida: ${result.outputDirectory}`);
