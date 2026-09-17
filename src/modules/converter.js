@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import heicConvert from "heic-convert";
-import sharp from "sharp";
+import { convertImageBuffer } from "./image-engine.js";
+import { MAX_FILE_BYTES } from "../shared/policy.js";
 
 import {
   createOutputDirectory,
@@ -9,54 +9,37 @@ import {
   getConvertibleImageFiles
 } from "./file-system.js";
 
-const WEBP_OPTIONS = { quality: 80 };
-
-function isHeicFile(filePath) {
-  return path.extname(filePath).toLowerCase() === ".heic";
-}
-
-async function convertHeicToWebp(inputPath, outputPath) {
-  const inputBuffer = await fs.readFile(inputPath);
-  const pngBuffer = await heicConvert({
-    buffer: inputBuffer,
-    format: "PNG"
-  });
-
-  await sharp(Buffer.from(pngBuffer))
-    .webp(WEBP_OPTIONS)
-    .toFile(outputPath);
-}
-
-async function convertFileToWebp(inputPath, outputPath) {
-  if (isHeicFile(inputPath)) {
-    await convertHeicToWebp(inputPath, outputPath);
-    return;
-  }
-
-  await sharp(inputPath)
-    .webp(WEBP_OPTIONS)
-    .toFile(outputPath);
-}
-
 export async function convertImageDirectoryToWebp(inputDirectory) {
   await ensureDirectoryExists(inputDirectory);
 
   const imageFiles = await getConvertibleImageFiles(inputDirectory);
 
   if (imageFiles.length === 0) {
-    throw new Error("No se encontraron archivos .jpg, .jpeg o .heic en la carpeta indicada.");
+    throw new Error("No se encontraron archivos JPG, PNG o HEIC en la carpeta indicada.");
   }
 
   const outputDirectory = await createOutputDirectory(inputDirectory);
 
+  let convertedCount = 0;
+  const errors = [];
   for (const file of imageFiles) {
-    const outputPath = path.join(outputDirectory, file.outputName);
-    await convertFileToWebp(file.inputPath, outputPath);
+    try {
+      const stats = await fs.stat(file.inputPath);
+      if (stats.size > MAX_FILE_BYTES) throw new Error("La imagen supera el límite de 20 MB.");
+      const output = await convertImageBuffer(await fs.readFile(file.inputPath));
+      const outputPath = path.join(outputDirectory, file.outputName);
+      await fs.mkdir(path.dirname(outputPath), { recursive: true });
+      await fs.writeFile(outputPath, output, { flag: "wx" });
+      convertedCount++;
+    } catch (error) {
+      errors.push({ file: file.inputPath, message: error.code === "EEXIST" ? "El archivo de salida ya existe; no se sobrescribió." : error.message });
+    }
   }
 
   return {
-    convertedCount: imageFiles.length,
-    outputDirectory
+    convertedCount,
+    outputDirectory,
+    errors
   };
 }
 

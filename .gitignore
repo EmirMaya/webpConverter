@@ -3,3 +3,11 @@ imagenes-webp/
 *-webp/
 sample-input/
 sample-input-webp/
+.next/
+out/
+*.tsbuildinfo
+.env*
+!.env.example
+test-results/
+playwright-report/
+.test-tmp/

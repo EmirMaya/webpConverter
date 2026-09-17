@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const VALID_EXTENSIONS = new Set([".jpg", ".jpeg", ".heic"]);
+import { isSupportedName, uniqueWebpPath } from "../shared/policy.js";
 
 export async function ensureDirectoryExists(directoryPath) {
   const stats = await fs.stat(directoryPath).catch(() => null);
@@ -22,15 +22,20 @@ export async function createOutputDirectory(inputDirectory) {
 }
 
 export async function getConvertibleImageFiles(directoryPath) {
-  const entries = await fs.readdir(directoryPath, { withFileTypes: true });
-
-  return entries
-    .filter((entry) => entry.isFile())
-    .filter((entry) => VALID_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
-    .map((entry) => ({
-      inputPath: path.join(directoryPath, entry.name),
-      outputName: `${path.parse(entry.name).name}.webp`
-    }));
+  const files = [];
+  const used = new Set();
+  async function visit(directory, relative = "") {
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      const inputPath = path.join(directory, entry.name);
+      const relativePath = path.posix.join(relative, entry.name);
+      if (entry.isDirectory()) await visit(inputPath, relativePath);
+      else if (entry.isFile() && isSupportedName(entry.name)) files.push({ inputPath, outputName: uniqueWebpPath(relativePath, used) });
+    }
+  }
+  await visit(directoryPath);
+  return files;
 }
 
 export const getJpgFiles = getConvertibleImageFiles;

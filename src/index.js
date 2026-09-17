@@ -8,6 +8,8 @@ async function main() {
 
     console.log(`Conversion finalizada: ${result.convertedCount} archivo(s) procesado(s).`);
     console.log(`Carpeta de salida: ${result.outputDirectory}`);
+    for (const error of result.errors) console.error(`${error.file}: ${error.message}`);
+    if (result.errors.length) process.exitCode = 1;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido.";
     console.error(`No se pudo completar la conversion: ${message}`);
