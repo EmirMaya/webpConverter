@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_QUALITY, MAX_BATCH_BYTES, MAX_FILE_BYTES, MAX_FILES, isSupportedName, uniqueWebpPath } from "@/shared/policy.js";
+import { DEFAULT_QUALITY, MAX_BATCH_BYTES, MAX_WEB_FILE_BYTES, MAX_WEB_FILE_MIB, MAX_FILES, isSupportedName, uniqueWebpPath } from "@/shared/policy.js";
 import type { SelectedFile } from "./files";
+import { convertUpload, UploadError } from "./convert-upload";
 
 export type ConversionItem = SelectedFile & {
   id: string; outputPath: string; status: "pending" | "processing" | "done" | "error" | "cancelled";
@@ -28,7 +29,7 @@ export function useConverter() {
     const accepted: SelectedFile[] = [];
     let rejected = 0;
     for (const selected of incoming) {
-      if (!isSupportedName(selected.file.name) || !selected.file.size || selected.file.size > MAX_FILE_BYTES) rejected++;
+      if (!isSupportedName(selected.file.name) || !selected.file.size || selected.file.size > MAX_WEB_FILE_BYTES) rejected++;
       else accepted.push(selected);
     }
     if (accepted.length + items.length > MAX_FILES || [...items, ...accepted].reduce((sum, item) => sum + item.file.size, 0) > MAX_BATCH_BYTES) {
@@ -38,7 +39,7 @@ export function useConverter() {
     const used = new Set(items.map((item) => item.outputPath.toLowerCase()));
     const additions = accepted.map((selected): ConversionItem => ({ ...selected, id: crypto.randomUUID(), outputPath: uniqueWebpPath(selected.relativePath, used), status: "pending" }));
     setItems((previous) => [...previous, ...additions]);
-    setNotice(rejected ? `Se omitieron ${rejected} archivos vacíos, no admitidos o mayores a 20 MB.` : "");
+    setNotice(rejected ? `Se omitieron ${rejected} archivos vacíos, no admitidos o mayores a ${MAX_WEB_FILE_MIB} MiB.` : "");
   }
 
   function clear() {
@@ -73,14 +74,10 @@ export function useConverter() {
         if (abort.signal.aborted) break;
         update(item.id, { status: "processing" });
         try {
-          const response = await fetch(`/api/convert?quality=${quality}`, {
-            method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: item.file, signal: abort.signal,
+          const blob = await convertUpload(item.file, quality, abort.signal, (seconds) => {
+            setNotice(`Pausa temporal: reintentaremos en ${seconds} segundos. Podés cancelar la conversión.`);
           });
-          if (!response.ok) {
-            const payload = await response.json().catch(() => null);
-            throw new Error(payload?.error || `No se pudo convertir (HTTP ${response.status}).`);
-          }
-          const blob = await response.blob();
+          setNotice("");
           if (abort.signal.aborted) break;
           if (resultBytes + blob.size > MAX_BATCH_BYTES) throw new Error("Los resultados superan 200 MB. Descargá este lote y comenzá uno nuevo.");
           resultBytes += blob.size;
@@ -89,6 +86,11 @@ export function useConverter() {
           update(item.id, { status: "done", blob, url });
         } catch (error) {
           if (abort.signal.aborted) break;
+          if (error instanceof UploadError && error.pauseBatch) {
+            update(item.id, { status: "pending" });
+            setNotice(error.message);
+            break;
+          }
           update(item.id, { status: "error", message: error instanceof Error ? error.message : "No se pudo conectar con el servidor." });
         }
       }

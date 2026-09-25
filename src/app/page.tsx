@@ -1,3 +1,7 @@
 import { Converter } from "@/components/converter";
+import { connection } from "next/server";
 
-export default function Page() { return <Converter />; }
+export default async function Page() {
+  await connection();
+  return <Converter />;
+}

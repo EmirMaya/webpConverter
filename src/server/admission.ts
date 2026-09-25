@@ -1,17 +1,26 @@
-import { RequestError } from "./convert-worker";
+import { AdmissionService } from "./admission-service";
+import { MemorySecurityStore } from "./memory-security-store";
+import { UpstashSecurityStore } from "./upstash-security-store";
+import { securityUnavailable } from "./errors";
+import type { AdmissionControl } from "./security-contracts";
 
-type AdmissionState = { active: number; count: number; window: number };
-const runtime = globalThis as typeof globalThis & { webpAdmission?: AdmissionState };
-const state = runtime.webpAdmission ??= { active: 0, count: 0, window: Date.now() };
+export function createAdmission(env: Readonly<Record<string, string | undefined>> = process.env): AdmissionControl {
+  const onVercel = env.VERCEL === "1";
+  const mode = env.RATE_LIMIT_BACKEND || (onVercel || env.NODE_ENV === "production" ? "redis" : "memory");
+  if (mode === "memory" && !onVercel) {
+    const store = new MemorySecurityStore();
+    return new AdmissionService(store, store);
+  }
+  const url = env.UPSTASH_REDIS_REST_URL;
+  const token = env.UPSTASH_REDIS_REST_TOKEN;
+  const prefix = env.RATE_LIMIT_PREFIX;
+  if (mode !== "redis" || !url || !token || !prefix || !/^[a-zA-Z0-9:_-]{1,80}$/.test(prefix)) throw securityUnavailable();
+  if (!url.startsWith("https://") || (onVercel && (env.RATE_LIMIT_ID_SECRET?.length ?? 0) < 32)) throw securityUnavailable();
+  const store = new UpstashSecurityStore(url, token, prefix);
+  return new AdmissionService(store, store);
+}
 
-// Per-process guard. Distributed/per-client limits belong at the reverse proxy.
-export function acquireConversion(): () => void {
-  const now = Date.now();
-  if (now - state.window >= 60_000) { state.count = 0; state.window = now; }
-  if (state.count >= 120) throw new RequestError("Se alcanzó el límite de solicitudes. Esperá un minuto.", 429);
-  state.count++;
-  if (state.active >= 2) throw new RequestError("El servidor está ocupado. Intentá nuevamente en unos segundos.", 503);
-  state.active++;
-  let released = false;
-  return () => { if (!released) { released = true; state.active--; } };
+let admission: AdmissionControl | undefined;
+export function getAdmission(): AdmissionControl {
+  return admission ??= createAdmission();
 }

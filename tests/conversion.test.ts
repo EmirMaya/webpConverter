@@ -5,10 +5,9 @@ import path from "node:path";
 import sharp from "sharp";
 import { convertImageBuffer } from "../src/modules/image-engine.js";
 import { convertImageDirectoryToWebp } from "../src/modules/converter.js";
-import { safeRelativePath, uniqueWebpPath, MAX_FILE_BYTES } from "../src/shared/policy.js";
+import { safeRelativePath, uniqueWebpPath, MAX_FILE_BYTES, MAX_WEB_FILE_BYTES } from "../src/shared/policy.js";
 import { readUpload } from "../src/server/read-upload";
 import { convertInWorker } from "../src/server/convert-worker";
-import { acquireConversion } from "../src/server/admission";
 
 const makePng = () => sharp({ create: { width: 24, height: 16, channels: 4, background: { r: 20, g: 120, b: 60, alpha: 0.4 } } }).png().toBuffer();
 
@@ -79,9 +78,9 @@ test("CLI processes subfolders, preserves successes, and never overwrites output
 });
 
 test("streamed upload limit applies without Content-Length", async () => {
-  const stream = new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(MAX_FILE_BYTES)); controller.enqueue(new Uint8Array(1)); controller.close(); } });
+  const stream = new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(MAX_WEB_FILE_BYTES)); controller.enqueue(new Uint8Array(1)); controller.close(); } });
   const request = new Request("http://localhost/api/convert", { method: "POST", body: stream, duplex: "half" } as RequestInit);
-  await assert.rejects(readUpload(request), /20 MB/);
+  await assert.rejects(readUpload(request), /4 MiB/);
   await assert.rejects(readUpload(new Request("http://localhost", { method: "POST", body: "" })), /vacía/);
 });
 
@@ -89,12 +88,4 @@ test("worker converts and rejects pre-cancelled jobs", async () => {
   const bytes = await convertInWorker(await makePng(), 80, new AbortController().signal);
   assert.equal((await sharp(bytes).metadata()).format, "webp");
   await assert.rejects(convertInWorker(await makePng(), 80, AbortSignal.abort()), /cancelada/);
-});
-
-test("server limits concurrent conversions and releases capacity", () => {
-  const first = acquireConversion();
-  const second = acquireConversion();
-  try { assert.throws(acquireConversion, /ocupado/); } finally { first(); second(); }
-  const next = acquireConversion();
-  next(); next();
 });

@@ -1,5 +1,24 @@
 # Workflow de migración
 
+> La migración inicial está completa. La adaptación posterior de seguridad para Vercel tiene su propio [workflow, configuración y verificación](VERCEL.md); reemplaza los límites de la web y la admisión por proceso descritos en el registro histórico de abajo.
+
+## Estado: 6 de 6 pasos completados
+
+Revisión final del estado guardado: 25 de septiembre de 2026. La implementación y la verificación local están completas. El último punto pendiente era registrar los resultados de las comprobaciones ya ejecutadas; no queda una etapa de implementación pendiente dentro de este alcance.
+
+| Comprobación | Resultado de la última ejecución |
+| --- | --- |
+| `npm run typecheck` | Aprobado |
+| `npm run lint` | Aprobado |
+| `npm test` con `HEIC_FIXTURE` | 10 pruebas aprobadas, ninguna omitida |
+| `npm run build` | Compilación de producción aprobada |
+| `npm run test:e2e` con `HEIC_FIXTURE` | 7 pruebas aprobadas en Edge, salida 0 |
+| `npm run convert` sobre un lote JPG + HEIC con el mismo nombre base | 2 imágenes convertidas, salida 0 |
+| `npm audit --omit=dev` | 0 vulnerabilidades reportadas |
+| `git diff --check` | Sin errores de espacios |
+
+Las pruebas de navegador cubrieron descarga individual, ZIP, errores parciales, validación de API, cancelación, vista móvil, selección de subcarpetas, arrastre de imágenes y HEIC real. En este entorno Windows fue necesario ejecutar Playwright fuera del sandbox para que pudiera cerrar automáticamente su servidor de pruebas. El despliegue y los límites del alojamiento siguen siendo una tarea de publicación aparte; la aplicación está lista para ejecutarse localmente con `npm run dev`.
+
 ## Pasos y criterios de aceptación
 
 1. **Motor compartido** — `src/modules/image-engine.js` recibe un Buffer y calidad, inspecciona el contenido y devuelve WebP en memoria. Conserva `sharp`, el paso HEIC → PNG de `heic-convert` y calidad 80. Verificado con JPEG, PNG transparente y HEIC real.

@@ -1,5 +1,8 @@
 // Shared by the browser, API, worker and original Node CLI.
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
+// Vercel limits request/response payloads to 4.5 MB. Keep the CLI limit separate.
+export const MAX_WEB_FILE_BYTES = 4 * 1024 * 1024;
+export const MAX_WEB_FILE_MIB = MAX_WEB_FILE_BYTES / 1024 / 1024;
 export const MAX_BATCH_BYTES = 200 * 1024 * 1024;
 export const MAX_FILES = 100;
 export const MAX_PIXELS = 40_000_000;

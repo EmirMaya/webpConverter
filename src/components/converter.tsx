@@ -5,6 +5,7 @@ import Link from "next/link";
 import { droppedFiles, formatBytes, selectedFiles } from "@/lib/files";
 import { downloadUrl, downloadZip } from "@/lib/download";
 import { useConverter } from "@/lib/use-converter";
+import { MAX_WEB_FILE_MIB } from "@/shared/policy.js";
 
 function Icon({ kind, size = 22 }: { kind: "upload" | "image" | "download" | "folder" | "arrow"; size?: number }) {
   const paths = {
@@ -56,7 +57,7 @@ export function Converter() {
           <h3>{reading ? "Leyendo tu selección…" : dragging ? "Soltá tus imágenes acá" : "Un nuevo formato empieza acá"}</h3>
           <p>Arrastrá tus imágenes o una carpeta completa</p>
           <div className="pick-actions"><button className="button primary" onClick={() => filesInput.current?.click()} disabled={busy}><Icon kind="image" size={18}/>Elegir imágenes</button><button className="button secondary" onClick={() => folderInput.current?.click()} disabled={busy}><Icon kind="folder" size={18}/>Elegir carpeta</button></div>
-          <span className="drop-hint">Hasta 100 imágenes · 20 MB por imagen · 200 MB por lote</span>
+          <span className="drop-hint">Hasta 100 imágenes · {MAX_WEB_FILE_MIB} MiB por imagen · 200 MiB por lote</span>
           <input ref={filesInput} className="visually-hidden" type="file" aria-label="Seleccionar imágenes" accept=".jpg,.jpeg,.png,.heic,.heif" multiple disabled={busy} onChange={(event) => { if (event.target.files) converter.addFiles(selectedFiles(event.target.files)); event.target.value = ""; }}/>
           <input ref={folderInput} className="visually-hidden" type="file" aria-label="Seleccionar carpeta" multiple {...{ webkitdirectory: "" }} disabled={busy} onChange={(event) => { if (event.target.files) converter.addFiles(selectedFiles(event.target.files)); event.target.value = ""; }}/>
         </div>

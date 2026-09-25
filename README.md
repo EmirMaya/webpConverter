@@ -1,6 +1,8 @@
 # WebP Studio
 
-Aplicación Next.js + TypeScript para adjuntar o arrastrar imágenes y carpetas, convertirlas a WebP y descargar cada resultado o un ZIP con las subcarpetas. Conserva el comando de consola y comparte el motor `sharp` / `heic-convert` entre ambos flujos. No necesita base de datos.
+Aplicación Next.js + TypeScript para adjuntar o arrastrar imágenes y carpetas, convertirlas a WebP y descargar cada resultado o un ZIP con las subcarpetas. Conserva el comando de consola y comparte el motor `sharp` / `heic-convert` entre ambos flujos. En Vercel usa Upstash Redis exclusivamente para cuotas y concurrencia; las imágenes no se almacenan allí.
+
+**Despliegue en Vercel:** seguir el [workflow de seguridad, variables y publicación](docs/VERCEL.md). La web admite imágenes de hasta **4 MiB**, tanto de entrada como de salida. La consola mantiene **20 MiB** de entrada.
 
 ## Ejecutar la web
 
@@ -35,11 +37,14 @@ Genera una carpeta hermana con sufijo `-webp`, recorriendo también las subcarpe
 | --- | --- |
 | Entrada | JPG/JPEG, PNG, HEIC/HEIF con compresión HEVC |
 | Calidad WebP | 1–100; valor inicial 80 |
-| Archivo de entrada / resultado web | Hasta 20 MiB cada uno |
+| Archivo de entrada / resultado web | Hasta 4 MiB cada uno (consola: 20 MiB de entrada) |
 | Dimensiones | Hasta 40 millones de píxeles |
 | Lote en navegador | 100 archivos, 200 MiB de entrada y 200 MiB de resultados |
-| Servidor | 2 solicitudes activas y 120 intentos por minuto por proceso |
-| Tiempo | 30 segundos de carga y 30 segundos de conversión |
+| Solicitudes por cliente | 60/minuto y hasta 5 en una ventana de 5 segundos |
+| Solicitudes globales | 120/minuto, compartidas entre instancias con Redis |
+| Concurrencia | 1 por cliente y 2 globales; permisos con vencimiento a 90 segundos |
+| Cuota de bytes | 64 MiB/minuto por cliente y 256 MiB/minuto globales |
+| Tiempo | 15 segundos de carga, 25 segundos de conversión, función Vercel hasta 60 segundos |
 | Arrastre de carpetas | Hasta 1000 entradas y 20 niveles |
 
 Se conservan dimensiones y transparencia y se aplica la orientación de la imagen. Se omiten metadatos del resultado. Se rechazan animaciones y archivos con múltiples páginas; SVG, GIF, WebP y AVIF no están admitidos como entrada. WebP no garantiza un tamaño menor que el original, especialmente al convertir HEIC.
@@ -65,7 +70,7 @@ La aplicación web usa TypeScript estricto. Los módulos compartidos y la consol
 
 `POST /api/convert?quality=80`, con el archivo como cuerpo binario y `Content-Type: application/octet-stream`. Devuelve `image/webp` o JSON `{ "error": "..." }`. Se usa una imagen por solicitud y lectura incremental del cuerpo para aplicar el límite aun sin `Content-Length`, sin tener que cargar un formulario completo antes de validarlo. La extensión y el MIME declarados no reemplazan la inspección del contenido real.
 
-Respuestas: 400 (entrada inválida), 403 (origen no permitido), 408 (tiempo/cancelación), 413 (tamaño), 415 (tipo de solicitud), 422 (imagen no convertible), 429 (frecuencia), 503 (capacidad), 500 (fallo interno). 429/503 incluyen `Retry-After`; se puede reintentar desde la interfaz.
+Respuestas: 400 (entrada inválida), 403 (origen no permitido), 408 (tiempo/cancelación), 413 (tamaño), 415 (tipo de solicitud), 422 (imagen no convertible), 429 (cuota/concurrencia del cliente), 503 (capacidad o controles de seguridad no disponibles), 500 (fallo interno). Los errores incluyen `code` y `requestId`; todas las respuestas incluyen `X-Request-Id`. La interfaz respeta `Retry-After` en 429/503 y reintenta hasta dos veces; si sigue saturado, pausa el lote conservando los pendientes.
 
 ## Verificación
 
@@ -78,6 +83,8 @@ npm run test:e2e
 ```
 
 Las pruebas de navegador arrancan un servidor de producción en el puerto 3100. Usan Edge instalado de manera predeterminada. Para otro entorno, instalar Chromium con `npx playwright install chromium` y definir `PLAYWRIGHT_CHANNEL=chromium` (o `chrome` para Chrome instalado).
+
+El servidor de pruebas usa explícitamente `RATE_LIMIT_BACKEND=memory` fuera de Vercel. La prueba de Redis real se omite por defecto; habilitarla con `RUN_REDIS_INTEGRATION=1`, `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN` de una base de prueba. Usa claves efímeras con prefijo único. Ver [validación de Redis y Preview](docs/VERCEL.md).
 
 Las pruebas HEIC se activan con `HEIC_FIXTURE` apuntando a un archivo real. Sin esa variable se omiten explícitamente. Para reproducirlas en PowerShell:
 
@@ -98,6 +105,10 @@ npm start
 
 Requiere alojamiento Node.js; la API no funciona como una exportación estática. Ejecutar desde la raíz del proyecto y conservar `src/workers`, `src/modules/image-engine.js`, `src/shared/policy.js` y las dependencias del motor. `next.config.ts` incluye esos archivos en el trazado de la ruta para empaquetadores compatibles.
 
-La aplicación valida contenido, dimensiones, calidad, tamaño real del cuerpo, origen y nombres. Limita concurrencia y frecuencia por proceso, evita cachear resultados y configura CSP, `nosniff`, protección contra iframes y restricciones de permisos. La CSP permite scripts inline para el HTML de Next.js; no constituye una política estricta con nonces. Los workers evitan bloquear el hilo HTTP durante HEIC, pero el límite de heap del worker no limita todas las asignaciones nativas de `sharp`/WASM.
+Para probar `npm start` localmente sin Redis, definir explícitamente `RATE_LIMIT_BACKEND=memory` antes de iniciarlo. `npm run dev` ya usa memoria de forma predeterminada. En Vercel ese modo se rechaza, incluso si está configurado por error: hacen falta las variables privadas descritas en `.env.example` y `docs/VERCEL.md`.
 
-Al publicar: usar HTTPS, mantener dependencias actualizadas y establecer límites de memoria/CPU del proceso o contenedor. Configurar en el proxy un límite de cuerpo de 20 MiB, tiempos adecuados y límites por cliente; los controles en memoria se reinician con el proceso y no se comparten entre instancias. El proxy debe preservar el origen público en el encabezado Host y evitar registrar cuerpos de solicitudes. Revisar los límites de carga, respuesta y duración del proveedor antes de elegir un alojamiento serverless. Esta migración no publica ni configura infraestructura externa.
+La aplicación valida contenido, dimensiones, calidad, tamaño real del cuerpo, origen y nombres. Redis mantiene las cuotas y los permisos temporales compartidos. Ante credenciales ausentes, errores o timeout del servicio de límites, devuelve 503 antes de convertir. La identificación usa el encabezado de IP de Vercel, agrupa IPv6 por /64 y lo transforma con HMAC; no guarda IP en claro en Redis. Personas que comparten IP comparten cuota.
+
+La CSP utiliza nonces distintos por solicitud para scripts y requiere renderizado dinámico de la página. Se conservan `nosniff`, bloqueo de iframes y permisos restringidos. En Vercel se agrega HSTS. Los logs contienen identificador de solicitud, estado, duración, tamaños y fallos de liberación, sin archivos, nombres ni IP. El worker no es un aislamiento de seguridad del proceso ni limita toda la memoria nativa de `sharp`/WASM.
+
+Antes de publicar, configurar Redis, reglas del Vercel Firewall, alertas de consumo y una Preview siguiendo [docs/VERCEL.md](docs/VERCEL.md). Los controles de la aplicación no reemplazan la protección temprana del proveedor contra abuso. Esta adaptación no crea recursos externos ni despliega automáticamente.

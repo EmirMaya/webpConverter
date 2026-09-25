@@ -3,6 +3,10 @@ import sharp from "sharp";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { unzipSync } from "fflate";
+import { MAX_WEB_FILE_BYTES } from "../../src/shared/policy.js";
+
+// A shared localhost identity intentionally uses the same real burst policy.
+test.beforeEach(async () => { await new Promise((resolve) => setTimeout(resolve, 5100)); });
 
 const image = () => sharp({ create: { width: 30, height: 20, channels: 4, background: { r: 50, g: 100, b: 60, alpha: 0.5 } } }).png().toBuffer();
 
@@ -39,7 +43,7 @@ test("API enforces content, quality, origin and size checks", async ({ request }
   expect((await request.post("/api/convert?quality=101", { headers, data: await image() })).status()).toBe(400);
   expect((await request.post("/api/convert", { headers: { ...headers, Origin: "https://example.com" }, data: await image() })).status()).toBe(403);
   expect((await request.post("/api/convert", { headers, data: "fake" })).status()).toBe(422);
-  expect((await request.post("/api/convert", { headers, data: Buffer.alloc(20 * 1024 * 1024 + 1) })).status()).toBe(413);
+  expect((await request.post("/api/convert", { headers, data: Buffer.alloc(MAX_WEB_FILE_BYTES + 1) })).status()).toBe(413);
 });
 
 test("cancellation keeps the interface usable", async ({ page }) => {
@@ -107,4 +111,34 @@ test("real HEIC upload downloads a valid WebP", async ({ page }) => {
   const download = page.waitForEvent("download");
   await button.click();
   expect((await sharp(await fs.readFile((await (await download).path())!)).metadata()).format).toBe("webp");
+});
+
+test("CSP nonces vary per request and permit the application scripts", async ({ page, request }) => {
+  const one = await request.get("/");
+  const two = await request.get("/");
+  const policy = one.headers()["content-security-policy"];
+  const firstNonce = /'nonce-([^']+)'/.exec(policy)?.[1];
+  const secondNonce = /'nonce-([^']+)'/.exec(two.headers()["content-security-policy"])?.[1];
+  expect(firstNonce).toBeTruthy();
+  expect(firstNonce).not.toBe(secondNonce);
+  expect(policy.split(";").find((part) => part.trim().startsWith("script-src"))).not.toContain("unsafe-inline");
+  expect(await one.text()).toContain(`nonce="${firstNonce}"`);
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Elegir imágenes" })).toBeEnabled();
+});
+
+test("429 waits and retries successfully", async ({ page }) => {
+  let attempts = 0;
+  const output = await sharp(await image()).webp().toBuffer();
+  await page.route("**/api/convert?*", async (route) => {
+    attempts++;
+    if (attempts === 1) await route.fulfill({ status: 429, headers: { "Retry-After": "1" }, json: { error: "busy" } });
+    else await route.fulfill({ status: 200, contentType: "image/webp", body: output });
+  });
+  await page.goto("/");
+  await page.getByLabel("Seleccionar imágenes", { exact: true }).setInputFiles({ name: "retry.png", mimeType: "image/png", buffer: await image() });
+  await page.getByRole("button", { name: "Convertir a WebP" }).click();
+  await expect(page.getByText("Pausa temporal:", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Descargar retry.webp", exact: true })).toBeVisible();
+  expect(attempts).toBe(2);
 });

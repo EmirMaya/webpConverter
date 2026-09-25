@@ -1,9 +1,7 @@
 import { Worker } from "node:worker_threads";
 import path from "node:path";
-
-export class RequestError extends Error {
-  constructor(message: string, public readonly status = 400) { super(message); }
-}
+import { RequestError } from "./errors";
+import { SECURITY_POLICY } from "./security-policy";
 
 export function convertInWorker(input: Uint8Array, quality: number, signal: AbortSignal): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
@@ -24,7 +22,7 @@ export function convertInWorker(input: Uint8Array, quality: number, signal: Abor
       );
     };
     const abort = () => finish(new RequestError("Conversión cancelada.", 408));
-    const timer = setTimeout(() => finish(new RequestError("La conversión superó los 30 segundos.", 408)), 30_000);
+    const timer = setTimeout(() => finish(new RequestError("La conversión superó los 25 segundos.", 408, "conversion_timeout")), SECURITY_POLICY.conversionTimeoutMs);
     signal.addEventListener("abort", abort, { once: true });
     worker.once("message", (result: { ok: boolean; data?: Uint8Array; message?: string }) => {
       if (result.ok && result.data) finish(undefined, result.data);

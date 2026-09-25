@@ -10,7 +10,8 @@
     "start": "next start",
     "convert": "node ./src/index.js",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
+    "verify:bundle": "node scripts/verify-worker-bundle.mjs",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "playwright test"
   },
@@ -18,6 +19,8 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.39.0",
     "fflate": "^0.8.3",
     "heic-convert": "^2.1.0",
     "next": "^16.3.5",
