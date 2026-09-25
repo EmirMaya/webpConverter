@@ -18,7 +18,10 @@ export function convertInWorker(input: Uint8Array, quality: number, signal: Abor
       settled = true;
       clearTimeout(timer);
       signal.removeEventListener("abort", abort);
-      void worker.terminate().finally(() => error ? reject(error) : resolve(data!));
+      void worker.terminate().then(
+        () => error ? reject(error) : resolve(data!),
+        () => reject(new RequestError("El procesamiento se interrumpió.", 500)),
+      );
     };
     const abort = () => finish(new RequestError("Conversión cancelada.", 408));
     const timer = setTimeout(() => finish(new RequestError("La conversión superó los 30 segundos.", 408)), 30_000);

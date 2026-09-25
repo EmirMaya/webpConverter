@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import sharp from "sharp";
 import fs from "node:fs/promises";
+import path from "node:path";
 import { unzipSync } from "fflate";
 
 const image = () => sharp({ create: { width: 30, height: 20, channels: 4, background: { r: 50, g: 100, b: 60, alpha: 0.5 } } }).png().toBuffer();
@@ -59,4 +60,51 @@ test("responsive layout has no horizontal overflow", async ({ page }) => {
   await page.screenshot({ path: "test-results/mobile.png", fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.screenshot({ path: "test-results/desktop.png", fullPage: true });
+});
+
+test("folder selection preserves subfolders in the downloaded ZIP", async ({ page }) => {
+  const root = path.resolve(".test-tmp");
+  await fs.mkdir(root, { recursive: true });
+  const folder = await fs.mkdtemp(path.join(root, "folder-"));
+  try {
+    await fs.mkdir(path.join(folder, "album"));
+    await fs.writeFile(path.join(folder, "foto.png"), await image());
+    await fs.writeFile(path.join(folder, "album", "foto.png"), await image());
+    await page.goto("/");
+    await page.getByLabel("Seleccionar carpeta", { exact: true }).setInputFiles(folder);
+    await page.getByRole("button", { name: "Convertir a WebP" }).click();
+    await expect(page.getByText("2 de 2 convertidas", { exact: false })).toBeVisible({ timeout: 30_000 });
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Descargar ZIP" }).click();
+    const entries = unzipSync(await fs.readFile((await (await download).path())!));
+    expect(Object.keys(entries).sort()).toEqual([`${path.basename(folder)}/album/foto.webp`, `${path.basename(folder)}/foto.webp`]);
+  } finally {
+    expect(folder.startsWith(root + path.sep)).toBe(true);
+    await fs.rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("drag and drop adds images", async ({ page }) => {
+  await page.goto("/");
+  const bytes = Array.from(await image());
+  await page.locator(".drop-zone").evaluate((element, data) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([new Uint8Array(data)], "arrastrada.png", { type: "image/png" }));
+    element.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer }));
+  }, bytes);
+  await expect(page.getByText("arrastrada.png", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Convertir a WebP" }).click();
+  await expect(page.getByRole("button", { name: "Descargar arrastrada.webp", exact: true })).toBeVisible();
+});
+
+test("real HEIC upload downloads a valid WebP", async ({ page }) => {
+  test.skip(!process.env.HEIC_FIXTURE, "Set HEIC_FIXTURE to a real HEIC file.");
+  await page.goto("/");
+  await page.getByLabel("Seleccionar imágenes", { exact: true }).setInputFiles({ name: "foto.heic", mimeType: "image/heic", buffer: await fs.readFile(process.env.HEIC_FIXTURE!) });
+  await page.getByRole("button", { name: "Convertir a WebP" }).click();
+  const button = page.getByRole("button", { name: "Descargar foto.webp", exact: true });
+  await expect(button).toBeVisible({ timeout: 30_000 });
+  const download = page.waitForEvent("download");
+  await button.click();
+  expect((await sharp(await fs.readFile((await (await download).path())!)).metadata()).format).toBe("webp");
 });

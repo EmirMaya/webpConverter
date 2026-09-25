@@ -67,7 +67,7 @@ test("CLI processes subfolders, preserves successes, and never overwrites output
     const result = await convertImageDirectoryToWebp(input);
     assert.equal(result.convertedCount, 3);
     assert.equal(result.errors.length, 1);
-    assert.equal((await sharp(path.join(result.outputDirectory, "album", "foto.webp")).metadata()).format, "webp");
+    assert.equal((await sharp(await fs.readFile(path.join(result.outputDirectory, "album", "foto.webp"))).metadata()).format, "webp");
     const repeated = await convertImageDirectoryToWebp(input);
     assert.equal(repeated.convertedCount, 0);
     assert.equal(repeated.errors.length, 4);

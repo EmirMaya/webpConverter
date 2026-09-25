@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { droppedFiles, formatBytes, selectedFiles } from "@/lib/files";
 import { downloadUrl, downloadZip } from "@/lib/download";
 import { useConverter } from "@/lib/use-converter";
@@ -39,7 +40,7 @@ export function Converter() {
   }
 
   return <main className="shell">
-    <header className="site-header"><a className="brand" href="/" aria-label="WebP Studio, inicio"><span className="brand-mark"><Icon kind="image"/></span>webp<span className="brand-light">studio</span><span className="brand-dot"/></a><span className="header-label">MENOS PESO. MÁS POSIBILIDADES.</span></header>
+    <header className="site-header"><Link className="brand" href="/" aria-label="WebP Studio, inicio"><span className="brand-mark"><Icon kind="image"/></span>webp<span className="brand-light">studio</span><span className="brand-dot"/></Link><span className="header-label">MENOS PESO. MÁS POSIBILIDADES.</span></header>
     <section className="intro"><span className="eyebrow"><span/> TU PRÓXIMO PASO HACIA UNA WEB MÁS LIGERA</span><h1>Tus imágenes.<br/><span>Ahora en WebP.</span></h1><p>Arrastrá, convertí y descargá. Dale a tus imágenes un formato<br className="desktop-break"/> más liviano, con la calidad que vos elegís.</p></section>
     <div className="workspace">
       <section className="upload-panel" aria-labelledby="upload-title">
